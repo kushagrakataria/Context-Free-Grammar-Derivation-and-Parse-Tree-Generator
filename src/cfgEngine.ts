@@ -80,11 +80,13 @@ export function parseGrammar(input: string): Grammar | null {
     if (parts.length !== 2) continue;
     
     const lhs = parts[0].trim();
+    // Split on | and trim each alternative (limitation: | inside symbols will break)
     const rhsParts = parts[1].split('|').map(p => p.trim());
     if (!rules[lhs]) rules[lhs] = [];
     
     for (const rhs of rhsParts) {
-      if (rhs === 'eps' || rhs === 'ε' || rhs === '') {
+      // Handle epsilon/empty string synonyms
+      if (rhs === 'eps' || rhs === 'ε' || rhs === 'epsilon' || rhs === '') {
         rules[lhs].push([]);
       } else {
         const symbols = tokenize(rhs);
@@ -134,6 +136,7 @@ export function findDerivationDFS(grammar: Grammar, target: string[], leftmost: 
 
   const results: { steps: DerivationStep[], tree: ParseTreeNode }[] = [];
   const seenStates = new Set<string>();
+  const pathSignatures = new Set<string>();
 
   while (stack.length > 0 && statesExplored < MAX_STATES) {
     statesExplored++;
@@ -144,6 +147,20 @@ export function findDerivationDFS(grammar: Grammar, target: string[], leftmost: 
     
     // Check if form matches target exactly
     if (arraysEqual(current.form, target)) {
+      // For ambiguity detection, check if this is a structurally different derivation
+      if (detectAmbiguity) {
+        const pathSig = current.steps
+          .filter(s => s.ruleUsed)
+          .map(s => `${s.ruleUsed!.lhs}->${s.ruleUsed!.rhs.join('')}`)
+          .join('|');
+        
+        if (pathSignatures.has(pathSig)) {
+          // Same derivation path, skip
+          continue;
+        }
+        pathSignatures.add(pathSig);
+      }
+      
       const tree = reconstructTree(grammar, current.steps, leftmost);
       results.push({ steps: current.steps, tree });
       if (results.length >= limit) {
@@ -226,12 +243,13 @@ export function findDerivationDFS(grammar: Grammar, target: string[], leftmost: 
       const newForm = [...current.form];
       newForm.splice(ntIndex, 1, ...production);
       
-      // For ambiguity detection, we need to explore all paths
-      // For normal derivation, we can skip seen states
+      // For normal derivation (not ambiguity detection), use path-based deduplication
       if (!detectAmbiguity) {
-        // Avoid infinite loops by checking if we've seen this state
-        // Don't include depth - same sentential form is same state regardless of depth
-        const stateKey = newForm.join(',');
+        // Include the full derivation path in the key to avoid blocking valid alternatives
+        const stateKey = current.steps
+          .map(s => s.ruleUsed ? `${s.ruleUsed.lhs}->${s.ruleUsed.rhs.join('')}` : 'START')
+          .join('|') + `|${nt}->${production.join('')}`;
+        
         if (seenStates.has(stateKey)) continue;
         seenStates.add(stateKey);
       }
@@ -293,51 +311,43 @@ function reconstructTree(grammar: Grammar, steps: DerivationStep[], leftmost: bo
   // Apply each derivation step to build the tree
   for (let i = 1; i < steps.length; i++) {
     const ruleUsed = steps[i].ruleUsed!;
-    const frontier = getFrontier(root);
-    
-    // Find the non-terminal node to expand
-    // We need to match the exact non-terminal that was expanded in this step
-    // by comparing against the sentential form from the previous step
     const prevForm = steps[i - 1].sententialForm;
     
-    let ntNode: ParseTreeNode | undefined;
-    let formIndex = 0;
+    // Get all frontier leaf nodes (unexpanded non-terminals + all terminals)
+    const frontier = getFrontier(root);
     
-    for (let j = 0; j < frontier.length; j++) {
-      const node = frontier[j];
+    // The prevForm and frontier must be in 1-to-1 correspondence
+    // Find which position in prevForm was expanded
+    let targetIdx = -1;
+    
+    for (let pos = 0; pos < prevForm.length && pos < frontier.length; pos++) {
+      const sym = prevForm[pos];
+      const node = frontier[pos];
       
-      // Skip if this node doesn't match the symbol in the previous sentential form
-      if (formIndex >= prevForm.length || node.symbol !== prevForm[formIndex]) {
-        formIndex++;
-        continue;
-      }
-      
-      // Check if this is an unexpanded non-terminal matching our rule
-      if (!node.isTerminal && 
-          node.symbol === ruleUsed.lhs && 
+      // Check if this is the non-terminal that was expanded
+      if (sym === ruleUsed.lhs && 
+          !node.isTerminal && 
           (!node.children || node.children.length === 0)) {
-        
-        // For leftmost, take the first match
-        // For rightmost, we need to find the rightmost match
         if (leftmost) {
-          ntNode = node;
+          // For leftmost, take the first unexpanded occurrence
+          targetIdx = pos;
           break;
         } else {
-          // Keep searching for rightmost
-          ntNode = node;
+          // For rightmost, keep searching to find the last occurrence
+          targetIdx = pos;
         }
       }
-      
-      formIndex++;
     }
     
-    if (ntNode) {
+    if (targetIdx !== -1 && targetIdx < frontier.length) {
+      const nodeToExpand = frontier[targetIdx];
+      
       // Expand the node with the production
       if (ruleUsed.rhs.length === 0) {
         // Epsilon production
-        ntNode.children = [{ symbol: 'ε', isTerminal: true }];
+        nodeToExpand.children = [{ symbol: 'ε', isTerminal: true }];
       } else {
-        ntNode.children = ruleUsed.rhs.map(sym => ({
+        nodeToExpand.children = ruleUsed.rhs.map(sym => ({
           symbol: sym,
           isTerminal: grammar.terminals.has(sym),
           children: []
@@ -359,4 +369,80 @@ function getFrontier(node: ParseTreeNode): ParseTreeNode[] {
     result.push(...getFrontier(child));
   }
   return result;
+}
+
+export function validateGrammar(input: string): string | null {
+  const lines = input.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  
+  // Check: At least one rule exists
+  if (lines.length === 0) {
+    return "Grammar must contain at least one production rule.";
+  }
+  
+  const rules: Record<string, boolean> = {};
+  let startSymbol = '';
+  
+  for (const line of lines) {
+    // Check: Each rule has exactly one -> or →
+    const parts = line.split(/->|→/);
+    if (parts.length !== 2) {
+      return `Invalid rule format: "${line}". Each rule must have exactly one -> or →.`;
+    }
+    
+    const lhs = parts[0].trim();
+    
+    // Check: No rule has an empty LHS
+    if (lhs === '') {
+      return `Rule has empty left-hand side: "${line}".`;
+    }
+    
+    // Check: LHS is a single capital letter or all-caps word
+    if (!/^[A-Z]+$/.test(lhs)) {
+      return `Invalid non-terminal "${lhs}". Non-terminals must be uppercase letters only.`;
+    }
+    
+    rules[lhs] = true;
+    if (!startSymbol) startSymbol = lhs;
+  }
+  
+  // Check: startSymbol has at least one production
+  if (!startSymbol || !rules[startSymbol]) {
+    return "Start symbol has no production rules.";
+  }
+  
+  return null; // Valid
+}
+
+export function getLanguageDescription(grammar: Grammar): string {
+  const rulesStr = JSON.stringify(grammar.rules);
+  
+  // Pattern: S -> a S b | eps (or similar)
+  if (rulesStr.includes('"a"') && rulesStr.includes('"b"') && 
+      rulesStr.includes('[]') && 
+      Object.keys(grammar.rules).length === 1) {
+    return "{ aⁿbⁿ | n ≥ 0 }";
+  }
+  
+  // Pattern: Palindromes (S -> a S a | b S b | ...)
+  const hasSymmetricRules = Object.values(grammar.rules).some(prods => 
+    prods.some(prod => 
+      prod.length >= 3 && 
+      prod[0] === prod[prod.length - 1] && 
+      grammar.nonTerminals.has(prod[Math.floor(prod.length / 2)])
+    )
+  );
+  if (hasSymmetricRules) {
+    return "Palindromes over the alphabet";
+  }
+  
+  // Pattern: Arithmetic expressions (E, T, F with +, *)
+  if (grammar.nonTerminals.has('E') && 
+      grammar.nonTerminals.has('T') && 
+      grammar.nonTerminals.has('F') &&
+      (rulesStr.includes('"+"') || rulesStr.includes('"*"'))) {
+    return "Arithmetic expressions";
+  }
+  
+  // Default
+  return "Custom context-free language";
 }

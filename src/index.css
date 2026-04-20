@@ -384,7 +384,7 @@ td { font-size: 0.95rem; }
 .node-children::before {
   content: '';
   position: absolute;
-  top: -16px;
+  top: -20px;
   left: 50%;
   width: calc(100% - 16px);
   transform: translateX(-50%);
@@ -397,10 +397,10 @@ td { font-size: 0.95rem; }
 
 .node-connector {
   position: absolute;
-  top: -32px;
+  top: -36px;
   left: 50%;
   width: 2px;
-  height: 16px;
+  height: 20px;
   background: #d4d4d8;
   transform: translateX(-50%);
 }
@@ -442,4 +442,59 @@ td { font-size: 0.95rem; }
   .app-layout { flex-direction: column; }
   .sidebar { width: 100%; height: auto; position: static; }
   .editor-layout { grid-template-columns: 1fr; }
+}
+
+/* Derivation step symbol highlighting */
+.derivation-step .nt-symbol {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.derivation-step .t-symbol {
+  color: #2563eb;
+}
+
+.derivation-step .new-symbol {
+  text-decoration: underline;
+  text-decoration-color: #f59e0b;
+}
+
+/* Example tags */
+.example-tag {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+}
+
+.example-tag.normal {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.example-tag.ambiguous {
+  background: #fef9c3;
+  color: #854d0e;
+}
+
+/* Two-column tree layout for ambiguity view */
+.two-col-trees {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.tree-panel-a .output-header {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.tree-panel-b .output-header {
+  background: #fffbeb;
+  color: #92400e;
 }

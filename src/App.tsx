@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Play, CheckCircle, XCircle, AlertTriangle, BookOpen, Presentation, Columns, Lightbulb, CheckSquare, Library } from 'lucide-react';
+import { Play, CheckCircle, XCircle, AlertTriangle, BookOpen, Presentation, Columns, Lightbulb, CheckSquare, Library, BookMarked } from 'lucide-react';
 import { parseGrammar, findDerivation, findAllLeftmostDerivations, type ParseTreeNode, type DerivationStep } from './cfgEngine';
 import './App.css';
 
@@ -55,6 +55,9 @@ function App() {
             <div className="nav-group-title">Practice</div>
             <button className={`nav-item ${activeTab === 'quiz' ? 'active' : ''}`} onClick={() => setActiveTab('quiz')}>
               <CheckSquare size={16} /> Knowledge Quiz
+            </button>
+            <button className={`nav-item ${activeTab === 'reference' ? 'active' : ''}`} onClick={() => setActiveTab('reference')}>
+              <BookMarked size={16} /> Quick Reference
             </button>
           </div>
         </nav>
@@ -133,12 +136,79 @@ const TheoryView = () => (
         <li>Use <strong>lowercase letters/symbols</strong> for terminals (a, b, +, 0, id).</li>
         <li>Use <code>-&gt;</code> to separate sides.</li>
         <li>Use <code>|</code> to list alternatives.</li>
-        <li>Use <code>eps</code> for epsilon (empty string).</li>
+        <li>Use <code>eps</code> or <code>epsilon</code> for empty string.</li>
       </ul>
       <div style={{ background: 'var(--bg-app)', padding: '1rem', borderRadius: '4px' }}>
         <p className="mono">S -&gt; a S b | eps</p>
         <p className="form-help" style={{ marginTop: '0.5rem' }}>Generates matched strings: aabb, aaabbb, etc.</p>
       </div>
+    </div>
+
+    <div className="card">
+      <h2 style={{ fontSize: '1.25rem', borderBottom: 'none' }}>4. Derivations: Leftmost vs Rightmost</h2>
+      <p>A <strong>derivation</strong> is a sequence of rule applications that transforms the start symbol into a target string. There are two standard strategies:</p>
+      <ul style={{ marginLeft: '1.5rem', marginBottom: '1rem' }}>
+        <li><strong>Leftmost Derivation (LMD):</strong> Always expand the leftmost non-terminal first.</li>
+        <li><strong>Rightmost Derivation (RMD):</strong> Always expand the rightmost non-terminal first.</li>
+      </ul>
+      <p><strong>Example:</strong> Grammar <code>S → aSb | ε</code>, deriving "aabb"</p>
+      <div style={{ background: 'var(--bg-app)', padding: '1rem', borderRadius: '4px', marginBottom: '1rem' }}>
+        <p className="mono" style={{ marginBottom: '0.5rem' }}><strong>Leftmost:</strong></p>
+        <p className="mono">S ⇒ aSb ⇒ aaSbb ⇒ aaεbb ⇒ aabb</p>
+      </div>
+      <div style={{ background: 'var(--bg-app)', padding: '1rem', borderRadius: '4px' }}>
+        <p className="mono" style={{ marginBottom: '0.5rem' }}><strong>Rightmost:</strong></p>
+        <p className="mono">S ⇒ aSb ⇒ aaSbb ⇒ aaεbb ⇒ aabb</p>
+        <p className="form-help" style={{ marginTop: '0.5rem' }}>Note: For this grammar, LMD and RMD produce the same sequence since there's only one non-terminal at each step.</p>
+      </div>
+    </div>
+
+    <div className="card">
+      <h2 style={{ fontSize: '1.25rem', borderBottom: 'none' }}>5. Parse Trees</h2>
+      <p>A <strong>parse tree</strong> records the structural result of a derivation. The root is the start symbol. Internal nodes are non-terminals. Leaves are terminals or ε. Reading leaves left-to-right gives the derived string.</p>
+      <p><strong>Example:</strong> Grammar <code>S → aSb | ε</code>, deriving "ab"</p>
+      <div style={{ background: 'var(--bg-app)', padding: '1rem', borderRadius: '4px', fontFamily: 'monospace', whiteSpace: 'pre' }}>
+{`      S
+     /|\\
+    a S b
+      |
+      ε`}
+      </div>
+      <p className="form-help" style={{ marginTop: '0.5rem' }}>The leaves read left-to-right: a, ε, b → "ab"</p>
+    </div>
+
+    <div className="card">
+      <h2 style={{ fontSize: '1.25rem', borderBottom: 'none' }}>6. Ambiguous Grammars</h2>
+      <p>A grammar is <strong>ambiguous</strong> if any string has two or more distinct parse trees. This means the grammar doesn't uniquely define the structure of that string.</p>
+      <p><strong>Example:</strong> Grammar <code>E → E + E | E * E | id</code> with string "id + id * id"</p>
+      <p>This grammar is ambiguous because it doesn't specify whether + or * has higher precedence. Two possible parse trees:</p>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
+        <div style={{ background: 'var(--bg-app)', padding: '1rem', borderRadius: '4px' }}>
+          <p className="mono" style={{ marginBottom: '0.5rem', fontWeight: 600 }}>Tree 1: (id + id) * id</p>
+          <div style={{ fontFamily: 'monospace', whiteSpace: 'pre', fontSize: '0.85rem' }}>
+{`      E
+     /|\\
+    E * E
+   /|\\  |
+  E + E id
+  |   |
+ id  id`}
+          </div>
+        </div>
+        <div style={{ background: 'var(--bg-app)', padding: '1rem', borderRadius: '4px' }}>
+          <p className="mono" style={{ marginBottom: '0.5rem', fontWeight: 600 }}>Tree 2: id + (id * id)</p>
+          <div style={{ fontFamily: 'monospace', whiteSpace: 'pre', fontSize: '0.85rem' }}>
+{`      E
+     /|\\
+    E + E
+    |  /|\\
+   id E * E
+      |   |
+     id  id`}
+          </div>
+        </div>
+      </div>
+      <p className="form-help" style={{ marginTop: '1rem' }}>To fix this, use separate non-terminals for different precedence levels (E for +, T for *, F for atoms).</p>
     </div>
   </div>
 );
@@ -183,14 +253,13 @@ const VisualizerView = ({ initialGrammar, initialTarget }: { initialGrammar?: st
   useEffect(() => {
     if (initialGrammar) {
       setGrammarInput(initialGrammar);
-      setStatus('idle');
-      setResult(undefined);
     }
     if (initialTarget) {
       setTargetString(initialTarget);
-      setStatus('idle');
-      setResult(undefined);
     }
+    // Reset result when grammar or target changes
+    setStatus('idle');
+    setResult(undefined);
   }, [initialGrammar, initialTarget]);
 
   const handleGenerate = () => {
@@ -288,28 +357,46 @@ const VisualizerView = ({ initialGrammar, initialTarget }: { initialGrammar?: st
 const ExamplesView = ({ setActiveTab, setExample }: { setActiveTab?: (tab: any) => void, setExample?: (grammar: string, target: string) => void }) => {
   const examples = [
     {
-      title: "Matched Parentheses",
-      description: "Demonstrates non-regular nested structures.",
-      grammar: "S -> ( S ) | S S | eps",
-      target: "( ( ) ( ) )"
-    },
-    {
-      title: "Standard Equations (Unambiguous)",
-      description: "Enforces standard PEMDAS operator precedence.",
-      grammar: "E -> E + T | T\nT -> T * F | F\nF -> id",
-      target: "id + id * id"
-    },
-    {
-      title: "Simple Palindromes",
-      description: "Symmetric generation from the inside out.",
-      grammar: "S -> a S a | b S b\nS -> a | b | eps",
-      target: "a b b a"
-    },
-    {
-      title: "Balanced Strings (a^n b^n)",
-      description: "Classic context-free language with equal a's and b's.",
+      title: "aⁿbⁿ (Balanced Pairs)",
+      description: "Classic non-regular language with equal a's and b's.",
       grammar: "S -> a S b | eps",
-      target: "a a b b"
+      target: "a a b b",
+      tag: "normal"
+    },
+    {
+      title: "Arithmetic (Unambiguous, correct precedence)",
+      description: "Enforces multiplication before addition via grammar structure.",
+      grammar: "E -> E + T | T\nT -> T * F | F\nF -> id",
+      target: "id + id * id",
+      tag: "normal"
+    },
+    {
+      title: "Arithmetic (Ambiguous)",
+      description: "Same language as Example 2 but ambiguous — try in the Ambiguity Checker!",
+      grammar: "E -> E + E | E * E | id",
+      target: "id + id * id",
+      tag: "ambiguous"
+    },
+    {
+      title: "Palindromes over {a,b}",
+      description: "Strings that read the same forwards and backwards.",
+      grammar: "S -> a S a | b S b | a | b | eps",
+      target: "a b b a",
+      tag: "normal"
+    },
+    {
+      title: "Matched Parentheses",
+      description: "Properly nested bracket structures — a context-free classic.",
+      grammar: "S -> ( S ) | S S | eps",
+      target: "( ( ) ( ) )",
+      tag: "normal"
+    },
+    {
+      title: "Dangling-Else (Ambiguous)",
+      description: "The classic dangling-else ambiguity in programming languages.",
+      grammar: "S -> if E then S | if E then S else S | stmt\nE -> cond",
+      target: "if cond then if cond then stmt else stmt",
+      tag: "ambiguous"
     }
   ];
 
@@ -322,6 +409,15 @@ const ExamplesView = ({ setActiveTab, setExample }: { setActiveTab?: (tab: any) 
     }
   };
 
+  const handleCheckAmbiguity = (grammar: string, target: string) => {
+    if (setExample) {
+      setExample(grammar, target);
+    }
+    if (setActiveTab) {
+      setActiveTab('ambiguity');
+    }
+  };
+
   return (
     <div>
       <h1>Built-in Language Examples</h1>
@@ -330,6 +426,9 @@ const ExamplesView = ({ setActiveTab, setExample }: { setActiveTab?: (tab: any) 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
         {examples.map((example, idx) => (
           <div className="card" key={idx}>
+            <span className={`example-tag ${example.tag}`}>
+              {example.tag === 'ambiguous' ? 'Ambiguous' : 'Standard'}
+            </span>
             <h4>{example.title}</h4>
             <p className="form-help">{example.description}</p>
             <div style={{ padding: '1rem', background: 'var(--bg-app)', margin: '1rem 0', borderRadius: '4px' }}>
@@ -342,6 +441,15 @@ const ExamplesView = ({ setActiveTab, setExample }: { setActiveTab?: (tab: any) 
             >
               Run in Visualizer
             </button>
+            {example.tag === 'ambiguous' && (
+              <button 
+                className="btn btn-secondary btn-block" 
+                style={{ marginTop: '0.5rem' }}
+                onClick={() => handleCheckAmbiguity(example.grammar, example.target)}
+              >
+                Check Ambiguity
+              </button>
+            )}
           </div>
         ))}
       </div>
@@ -353,7 +461,7 @@ const AmbiguityView = () => {
   const [grammarInput, setGrammarInput] = useState('E -> E + E | E * E | id');
   const [targetString, setTargetString] = useState('id + id * id');
   const [status, setStatus] = useState<'idle' | 'checking' | 'unambiguous' | 'ambiguous' | 'error'>('idle');
-  const [trees, setTrees] = useState<ParseTreeNode[]>([]);
+  const [derivations, setDerivations] = useState<{ steps: DerivationStep[], tree: ParseTreeNode }[]>([]);
 
   const handleCheck = () => {
     try {
@@ -364,13 +472,13 @@ const AmbiguityView = () => {
         const allDerivations = findAllLeftmostDerivations(grammar, targetString, 2);
         
         if (allDerivations.length > 1) {
-          setTrees(allDerivations.map(d => d.tree));
+          setDerivations(allDerivations);
           setStatus('ambiguous');
         } else if (allDerivations.length === 1) {
-          setTrees([allDerivations[0].tree]);
+          setDerivations([allDerivations[0]]);
           setStatus('unambiguous');
         } else {
-          setTrees([]);
+          setDerivations([]);
           setStatus('error');
         }
       }, 100);
@@ -397,23 +505,67 @@ const AmbiguityView = () => {
         </div>
         <button className="btn btn-primary" onClick={handleCheck}>Check Ambiguity</button>
 
-        {status === 'unambiguous' && <div className="alert alert-success">✅ Verdict: Unambiguous. Only one parse tree found.</div>}
-        {status === 'ambiguous' && <div className="alert alert-danger">⚠️ Verdict: Ambiguous. Multiple valid trees found.</div>}
-        {status === 'error' && <div className="alert alert-warning">Syntax error or string invalid.</div>}
+        {status === 'unambiguous' && <div className="alert alert-success"><CheckCircle size={18}/> Verdict: Unambiguous. Only one parse tree found.</div>}
+        {status === 'ambiguous' && (
+          <>
+            <div className="alert alert-danger"><AlertTriangle size={18}/> Verdict: Ambiguous. Multiple valid trees found.</div>
+            <div style={{ marginTop: '1rem', padding: '1rem', background: '#fef9c3', border: '1px solid #fef08a', borderRadius: '6px', fontSize: '0.9rem', color: '#854d0e' }}>
+              <strong>Explanation:</strong> This grammar is ambiguous because the string "{targetString}" can be derived in two different ways, producing different parse trees. This means the grammar has multiple valid interpretations for this string.
+            </div>
+          </>
+        )}
+        {status === 'error' && <div className="alert alert-warning"><AlertTriangle size={18}/> Syntax error or string invalid.</div>}
       </div>
 
-      {trees.length > 0 && (
-        <div style={{ display: 'flex', gap: '2rem', marginTop: '2rem' }}>
-          <div style={{ flex: 1 }} className="output-panel">
-             <div className="output-header">Parse Tree 1 (Derivation A)</div>
-             <TreeView node={trees[0]} />
-          </div>
-          {trees.length > 1 && (
-            <div style={{ flex: 1 }} className="output-panel">
-               <div className="output-header">Parse Tree 2 (Derivation B)</div>
-               <TreeView node={trees[1]} />
+      {derivations.length > 0 && status === 'ambiguous' && derivations.length > 1 && (
+        <div className="two-col-trees">
+          <div className="output-panel tree-panel-a">
+            <div className="output-header">Tree A (First Derivation)</div>
+            <div className="output-body">
+              <TreeView node={derivations[0].tree} />
+              <details style={{ marginTop: '1.5rem' }}>
+                <summary style={{ cursor: 'pointer', fontWeight: 600, marginBottom: '0.5rem' }}>Derivation Steps</summary>
+                <div style={{ padding: '0.5rem', background: 'var(--bg-app)', borderRadius: '4px', fontSize: '0.85rem' }}>
+                  {derivations[0].steps.map((step, idx) => (
+                    <div key={idx} style={{ padding: '0.25rem 0', fontFamily: 'monospace' }}>
+                      {step.sententialForm.join(' ') || 'ε'}
+                      {step.ruleUsed && <span style={{ color: 'var(--text-muted)', marginLeft: '1rem' }}>
+                        ({step.ruleUsed.lhs} → {step.ruleUsed.rhs.join(' ') || 'ε'})
+                      </span>}
+                    </div>
+                  ))}
+                </div>
+              </details>
             </div>
-          )}
+          </div>
+          <div className="output-panel tree-panel-b">
+            <div className="output-header">Tree B (Second Derivation)</div>
+            <div className="output-body">
+              <TreeView node={derivations[1].tree} />
+              <details style={{ marginTop: '1.5rem' }}>
+                <summary style={{ cursor: 'pointer', fontWeight: 600, marginBottom: '0.5rem' }}>Derivation Steps</summary>
+                <div style={{ padding: '0.5rem', background: 'var(--bg-app)', borderRadius: '4px', fontSize: '0.85rem' }}>
+                  {derivations[1].steps.map((step, idx) => (
+                    <div key={idx} style={{ padding: '0.25rem 0', fontFamily: 'monospace' }}>
+                      {step.sententialForm.join(' ') || 'ε'}
+                      {step.ruleUsed && <span style={{ color: 'var(--text-muted)', marginLeft: '1rem' }}>
+                        ({step.ruleUsed.lhs} → {step.ruleUsed.rhs.join(' ') || 'ε'})
+                      </span>}
+                    </div>
+                  ))}
+                </div>
+              </details>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {derivations.length > 0 && status === 'unambiguous' && (
+        <div style={{ marginTop: '2rem' }} className="output-panel">
+          <div className="output-header">Parse Tree (Unique)</div>
+          <div className="output-body">
+            <TreeView node={derivations[0].tree} />
+          </div>
         </div>
       )}
     </div>
@@ -425,7 +577,13 @@ const QuizView = () => {
     { q: "Which describes a Context-Free Grammar?", options: ["Context matters.", "Non-terminal replaced independent of context.", "No recursive rules.", "Only regular languages."], answer: 1 },
     { q: "A string with two distinct parse trees makes the grammar:", options: ["Unambiguous", "Deterministic", "Ambiguous", "Context-sensitive"], answer: 2 },
     { q: "Expands rightmost non-terminal first:", options: ["LMD", "Top-Down Derivation", "Terminal Derivation", "RMD"], answer: 3 },
-    { q: "In a parse tree, leaf nodes represent:", options: ["Non-terminals", "Terminals or ε", "Start symbol S", "Production rules"], answer: 1 }
+    { q: "In a parse tree, leaf nodes represent:", options: ["Non-terminals", "Terminals or ε", "Start symbol S", "Production rules"], answer: 1 },
+    { q: "Which of these is NOT a context-free language?", options: ["aⁿbⁿ", "Palindromes over {a,b}", "aⁿbⁿcⁿ", "Balanced parentheses"], answer: 2 },
+    { q: "In a parse tree, what do leaf nodes represent?", options: ["Non-terminals only", "Terminals or ε", "The start symbol", "Production rules"], answer: 1 },
+    { q: "What does LMD stand for?", options: ["Least Meaningful Derivation", "Leftmost Derivation", "Linear Memory DFA", "Last Match Detection"], answer: 1 },
+    { q: "A grammar where every string has exactly ONE parse tree is called:", options: ["Regular", "Unambiguous", "Deterministic", "Complete"], answer: 1 },
+    { q: "The language {aⁿbⁿ | n ≥ 0} is:", options: ["Regular", "Context-free but not regular", "Context-sensitive", "Recursively enumerable only"], answer: 1 },
+    { q: "Which component is NOT part of a CFG G = (V, T, P, S)?", options: ["V — non-terminals", "T — terminals", "P — production rules", "Q — states"], answer: 3 }
   ];
 
   const [currentQ, setCurrentQ] = useState(0);
@@ -492,6 +650,65 @@ const ReferenceView = () => (
   <div>
     <h1>Quick Reference</h1>
     <p>A quick summary of notation used across the tool and course material.</p>
+
+    <div className="card">
+      <h2 style={{ fontSize: '1.25rem', borderBottom: 'none' }}>Notation Table</h2>
+      <div className="table-wrapper">
+        <table>
+          <thead>
+            <tr><th>Symbol</th><th>Meaning</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>V</code> or <code>N</code></td><td>Set of non-terminals</td></tr>
+            <tr><td><code>T</code> or <code>Σ</code></td><td>Set of terminals</td></tr>
+            <tr><td><code>P</code></td><td>Set of production rules</td></tr>
+            <tr><td><code>S</code></td><td>Start symbol</td></tr>
+            <tr><td><code>ε</code></td><td>Empty string (epsilon)</td></tr>
+            <tr><td><code>→</code></td><td>"Produces"</td></tr>
+            <tr><td><code>⇒</code></td><td>One derivation step</td></tr>
+            <tr><td><code>⇒*</code></td><td>Zero or more steps</td></tr>
+            <tr><td><code>⇒lm</code></td><td>Leftmost derivation step</td></tr>
+            <tr><td><code>⇒rm</code></td><td>Rightmost derivation step</td></tr>
+            <tr><td><code>L(G)</code></td><td>Language of grammar G</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div className="card">
+      <h2 style={{ fontSize: '1.25rem', borderBottom: 'none' }}>Key Facts</h2>
+      <ul style={{ marginLeft: '1.5rem', lineHeight: '1.8' }}>
+        <li>Every regular language is also a CFL</li>
+        <li>Not every CFL is regular (e.g. aⁿbⁿ)</li>
+        <li>CFLs are recognized by Pushdown Automata (PDAs)</li>
+        <li>The language aⁿbⁿcⁿ is NOT context-free</li>
+        <li>A grammar is ambiguous if any string has 2+ parse trees</li>
+        <li>For unambiguous grammars, LMD and RMD produce the same parse tree</li>
+        <li>Deciding if an arbitrary CFG is ambiguous is undecidable</li>
+      </ul>
+    </div>
+
+    <div className="card">
+      <h2 style={{ fontSize: '1.25rem', borderBottom: 'none' }}>Input Format Guide</h2>
+      <p>How to type rules in this tool:</p>
+      <div style={{ background: 'var(--bg-app)', padding: '1rem', borderRadius: '4px', marginTop: '1rem' }}>
+        <p className="mono" style={{ marginBottom: '0.5rem' }}><strong>Basic rule:</strong></p>
+        <p className="mono">S -&gt; a S b</p>
+        <p className="form-help" style={{ marginTop: '0.5rem', marginBottom: '1rem' }}>Non-terminals are UPPERCASE, terminals are lowercase</p>
+        
+        <p className="mono" style={{ marginBottom: '0.5rem' }}><strong>Multiple alternatives:</strong></p>
+        <p className="mono">S -&gt; a S b | a | eps</p>
+        <p className="form-help" style={{ marginTop: '0.5rem', marginBottom: '1rem' }}>Use | to separate alternatives</p>
+        
+        <p className="mono" style={{ marginBottom: '0.5rem' }}><strong>Multi-line grammar:</strong></p>
+        <p className="mono">E -&gt; E + T | T<br/>T -&gt; T * F | F<br/>F -&gt; id</p>
+        <p className="form-help" style={{ marginTop: '0.5rem', marginBottom: '1rem' }}>One rule per line</p>
+        
+        <p className="mono" style={{ marginBottom: '0.5rem' }}><strong>Empty string:</strong></p>
+        <p className="mono">S -&gt; eps</p>
+        <p className="form-help" style={{ marginTop: '0.5rem' }}>Use "eps", "epsilon", or "ε" for empty string</p>
+      </div>
+    </div>
   </div>
 );
 
